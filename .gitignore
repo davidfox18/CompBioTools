@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Coverage file for testing
+.coverage
 # Distribution/packaging
 dist/
 build/
