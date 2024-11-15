@@ -11,6 +11,7 @@ import sys
 import time
 import threading
 import warnings
+from tqdm import tqdm
 
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 warnings.filterwarnings('ignore', category=Warning)
@@ -22,6 +23,59 @@ class RMSDCalculator:
     def __init__(self):
         """Initialize RMSDCalculator."""
         pass
+    def show_progress(func):
+        """
+        Decorator that adds a progress bar for trajectory processing.
+        Falls back to spinner for non-trajectory operations.
+        """
+        def wrapper(*args, **kwargs):
+            self = args[0]  # Get instance reference
+            
+            # Check if we're dealing with a trajectory calculation
+            if func.__name__.endswith('_trajectory'):
+                # Get trajectory length from the first Universe object
+                mobile = args[1]  # mobile Universe is the second argument
+                n_frames = len(mobile.trajectory)
+                
+                with tqdm(total=n_frames, desc="Processing frames", 
+                         bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} frames') as pbar:
+                    # Store pbar in instance for use in the calculation functions
+                    self.pbar = pbar
+                    result = func(*args, **kwargs)
+                    self.pbar = None
+                return result
+            else:
+                # Use spinner for non-trajectory operations
+                spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+                busy = False
+                abort = False
+
+                def spinner_func():
+                    nonlocal busy, abort
+                    idx = 0
+                    while busy and not abort:
+                        sys.stdout.write(spinner[idx % len(spinner)])
+                        sys.stdout.flush()
+                        idx += 1
+                        time.sleep(0.1)
+                        sys.stdout.write("\b")
+                        sys.stdout.flush()
+
+                thread = threading.Thread(target=spinner_func)
+                busy = True
+                thread.start()
+
+                try:
+                    result = func(*args, **kwargs)
+                except:
+                    abort = True
+                    raise
+                finally:
+                    busy = False
+                    thread.join()
+
+                return result
+        return wrapper
         
     def spinner(func):
         """
@@ -73,7 +127,7 @@ class RMSDCalculator:
             u2 = mda.Universe(struct2, traj2) if traj2 else mda.Universe(struct2)
             
             # Debug information
-            print("\nStructure Details:")
+            print("\n\033[1mStructure Details:\033[0m")
             print(f"Structure 1: {struct1}")
             print(f"Total residues: {len(u1.residues)}")
             print(f"Residue numbers available: {u1.residues.resids[0]}-{u1.residues.resids[-1]}")
@@ -104,7 +158,7 @@ class RMSDCalculator:
             
         raise ValueError(f"Invalid mode: {mode}")
     
-    @spinner
+    @show_progress
     def calculate_per_atom_rmsd_trajectory(self,
                                 mobile: mda.Universe,
                                 reference: mda.Universe,
@@ -114,8 +168,6 @@ class RMSDCalculator:
                                 ref_align: mda.AtomGroup) -> Dict[str, float]:
         """Calculate RMSD between two trajectories for each atom."""
         rmsd_dict = {}
-        
-        # Prepare atom labels
         atom_labels = [f"{atom.resname}{atom.resid}-{atom.name}" for atom in mobile_atoms]
         
         n_atoms = len(mobile_atoms)
@@ -124,31 +176,28 @@ class RMSDCalculator:
         if n_atoms == 0 or n_frames == 0:
             raise ValueError("No atoms selected or empty trajectory")
             
-        # Store sum of squared differences for each atom
         sum_squared_diff = np.zeros(n_atoms)
         
-        # For each frame
         for ts_idx, (ts_mobile, ts_ref) in enumerate(zip(mobile.trajectory, reference.trajectory)):
-            # Align mobile to reference using alignment selections
             align.alignto(mobile.atoms, reference.atoms,
                         select=(mobile_align, ref_align),
                         weights="mass")
             
-            # Calculate differences for RMSD atoms after alignment
             diff = mobile_atoms.positions - ref_atoms.positions
             squared_diff = np.sum(np.square(diff), axis=1)
             sum_squared_diff += squared_diff
+            
+            if hasattr(self, 'pbar') and self.pbar:
+                self.pbar.update(1)
         
-        # Calculate RMSD per atom
         rms_distances = np.sqrt(sum_squared_diff / n_frames)
         
-        # Create dictionary with RMSD values
         for atom_label, rms_dist in zip(atom_labels, rms_distances):
             rmsd_dict[atom_label] = rms_dist
             
         return rmsd_dict
     
-    @spinner
+    @show_progress
     def calculate_per_residue_rmsd_trajectory(self,
                                         mobile: mda.Universe,
                                         reference: mda.Universe,
@@ -158,22 +207,16 @@ class RMSDCalculator:
                                         ref_align: mda.AtomGroup) -> Dict[str, float]:
         """Calculate RMSD between two trajectories for each residue."""
         rmsd_dict = {}
-        
-        # Get unique residues
         mobile_resids = np.unique(mobile_atoms.resids)
         ref_resids = np.unique(ref_atoms.resids)
         
         if len(mobile_resids) != len(ref_resids):
             raise ValueError("Number of residues differs between mobile and reference selections")
         
-        # Create residue mapping
         residue_mapping = dict(zip(mobile_resids, ref_resids))
-        
-        # Initialize squared differences dictionary
         residue_squared_diff = {resid: 0.0 for resid in mobile_resids}
         n_frames = len(mobile.trajectory)
         
-        # Pre-compute atom groups
         mobile_res_atoms = {}
         ref_res_atoms = {}
         for mobile_resid in mobile_resids:
@@ -184,27 +227,23 @@ class RMSDCalculator:
             if len(mobile_res_atoms[mobile_resid]) != len(ref_res_atoms[ref_resid]):
                 raise ValueError(f"Unequal number of atoms in residue pair {mobile_resid}/{ref_resid}")
         
-        # For each frame
         for ts_idx, (ts_mobile, ts_ref) in enumerate(zip(mobile.trajectory, reference.trajectory)):
-            # Align mobile to reference using alignment selections
             align.alignto(mobile.atoms, reference.atoms,
                         select=(mobile_align, ref_align),
                         weights="mass")
             
-            # Calculate RMSD for each residue
             for mobile_resid in mobile_resids:
                 ref_resid = residue_mapping[mobile_resid]
-                
-                # Get atom groups for this residue
                 mob_atoms = mobile_res_atoms[mobile_resid]
                 ref_atoms_res = ref_res_atoms[ref_resid]
                 
-                # Calculate squared differences
                 diff = mob_atoms.positions - ref_atoms_res.positions
                 squared_diff = np.sum(np.square(diff))
                 residue_squared_diff[mobile_resid] += squared_diff
+            
+            if hasattr(self, 'pbar') and self.pbar:
+                self.pbar.update(1)
         
-        # Calculate final RMSD for each residue
         for mobile_resid in mobile_resids:
             mobile_res = mobile_res_atoms[mobile_resid]
             n_atoms = len(mobile_res)
@@ -212,6 +251,7 @@ class RMSDCalculator:
             rmsd_dict[f"{mobile_res.residues[0].resname}{mobile_resid}"] = rmsd
         
         return rmsd_dict
+
     
     @spinner
     def calculate_per_residue_rmsd(self,
@@ -329,7 +369,7 @@ class RMSDCalculator:
                            ref_selection: str,
                            mode: str) -> Tuple[float, Dict[str, float]]:
         """Align structures and calculate RMSD."""
-        print("\nSelection Details:")
+        print("\n\033[1mSelection Details:\033[0m")
         print(f"Mobile selection string: {mobile_selection}")
         print(f"Reference selection string: {ref_selection}")
         
@@ -495,7 +535,7 @@ def main():
         # Print selection information
         atoms1 = u1.select_atoms(sel1)
         atoms2 = u2.select_atoms(sel2)
-        print("\nStructure Analysis:")
+        print("\n\033[1mStructure Analysis:\033[0m")
         print(f"Structure 1: {args.struct1}")
         if args.t1:
             print(f"Trajectory 1: {args.t1}")
@@ -518,7 +558,7 @@ def main():
         # Print results
         mode_desc = {'a': 'all atoms', 'r': 'per residue', 'c': 'CA only'}
         print(f"\nResults:")
-        print(f"Overall mean RMSD ({mode_desc[args.m]}): {overall_rmsd:.3f} Å")
+        print(f"\033[1mOverall mean RMSD\033[0m ({mode_desc[args.m]}): {overall_rmsd:.3f} Å")
         
         # Write sorted RMSD table
         calculator.write_sorted_output(rmsd_dict, args.table)
