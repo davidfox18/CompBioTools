@@ -25,4 +25,3 @@ ENV/
 *.pdb
 *.dcd
 *.prmtop
-rmsd_*
