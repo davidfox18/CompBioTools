@@ -37,7 +37,7 @@ class RMSDCalculator:
                 mobile = args[1]  # mobile Universe is the second argument
                 n_frames = len(mobile.trajectory)
                 
-                with tqdm(total=n_frames, desc="Processing frames", 
+                with tqdm(total=n_frames, colour='green', desc="Processing frames", 
                          bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} frames') as pbar:
                     # Store pbar in instance for use in the calculation functions
                     self.pbar = pbar
@@ -147,10 +147,15 @@ class RMSDCalculator:
     
     def get_selection_string(self, resid_range: str, mode: str) -> str:
         """Create MDAnalysis selection string based on residue range and mode."""
-        start, end = self.parse_residue_range(resid_range)
-        
-        base_selection = f"resid {start}:{end}"
-        
+        try:
+
+            start, end = self.parse_residue_range(resid_range)
+            
+            base_selection = f"resid {start}:{end}"
+        except:
+            if resid_range == "protein":
+                base_selection = "protein"
+    
         if mode == 'c':
             return f"({base_selection}) and name CA"
         elif mode in ['a', 'r']:
@@ -477,7 +482,6 @@ class RMSDCalculator:
             with open(output_file, 'r') as f:
                 lines = f.readlines()
             
-            with open(output_file, 'w') as f:
                 for line in lines:
                     if line.startswith('ATOM') or line.startswith('HETATM'):
                         resname = line[17:20].strip()
@@ -516,10 +520,10 @@ def main():
                         help='RMSD mode: a (all atoms), r (per residue), c (CA only)')
     parser.add_argument('-o', required=False, default='rmsd_plot.png',
                        help='name of output file for RMSD plot. Default \'rmsd_plot.png\'')
-    parser.add_argument('--table', required=False, default='rmsd_sorted.txt',
-                       help='name of output file for sorted RMSD table. Default \'rmsd_sorted.txt\'')
-    parser.add_argument('--pdb', required=False, default='rmsd_colored.pdb',
-                       help='name of output PDB colored by RMSD. Default \'rmsd_colored.pdb\'')
+    parser.add_argument('--table', nargs='?', const='rmsd_sorted.txt', default=None,
+                  help='name of output file for sorted RMSD table. Default \'rmsd_sorted.txt\'')
+    parser.add_argument('--pdb', nargs='?', const='rmsd_colored.pdb', default=None,
+                  help='name of output PDB colored by RMSD. Default \'rmsd_colored.pdb\'')
     
     args = parser.parse_args()
     calculator = RMSDCalculator()
@@ -561,10 +565,14 @@ def main():
         print(f"\033[1mOverall mean RMSD\033[0m ({mode_desc[args.m]}): {overall_rmsd:.3f} Å")
         
         # Write sorted RMSD table
-        calculator.write_sorted_output(rmsd_dict, args.table)
+        if args.table:
+            calculator.write_sorted_output(rmsd_dict, args.table)
+            
         
         # Write PDB with RMSD as B-factors
-        calculator.write_rmsd_to_pdb(u1, rmsd_dict, args.pdb)
+        if args.pdb:
+            calculator.write_rmsd_to_pdb(u1, rmsd_dict, args.pdb)
+            
         
         # Plot RMSD values
         title = f"RMSD Distribution ({mode_desc[args.m]})"
