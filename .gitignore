@@ -3,8 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Coverage file for testing
+# testing
 .coverage
+*.sh
+
 # Distribution/packaging
 dist/
 build/
@@ -27,3 +29,4 @@ ENV/
 *.pdb
 *.dcd
 *.prmtop
+*.pickle
