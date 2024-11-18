@@ -141,26 +141,19 @@ class RMSDCalculator:
         except Exception as e:
             raise Exception(f"Error loading structure/trajectory files: {str(e)}")
     
+    """
     def parse_residue_range(self, resid_range: str) -> Tuple[int, int]:
-        """Parse residue range string 'xxx-xxx' into start and end residue numbers."""
+        """"Parse residue range string 'xxx-xxx' into start and end residue numbers."""""
         start, end = map(int, resid_range.split('-'))
         return start, end
-    
-    def get_selection_string(self, resid_range: str, mode: str) -> str:
-        """Create MDAnalysis selection string based on residue range and mode."""
-        try:
+    """
 
-            start, end = self.parse_residue_range(resid_range)
-            
-            base_selection = f"resid {start}:{end}"
-        except:
-            if resid_range == "protein":
-                base_selection = "protein"
-    
+    def get_selection_string(self, selection: str, mode: str) -> str:
+        """Create MDAnalysis selection string based on selection and mode."""
         if mode == 'c':
-            return f"({base_selection}) and name CA"
+            return f"({selection}) and name CA"
         elif mode in ['a', 'r']:
-            return base_selection
+            return selection
             
         raise ValueError(f"Invalid mode: {mode}")
     
@@ -523,9 +516,9 @@ class RMSDCalculator:
 def main():
     parser = argparse.ArgumentParser(description='Calculate RMSD between structures/trajectories using MDAnalysis')
     parser.add_argument('struct1', help='First structure file (PDB, GRO, etc.)')
-    parser.add_argument('-s1', required=True, help='Residue selection for first structure (format: xxx-xxx)')
+    parser.add_argument('-s1', required=True, type=str, help='Residue selection for first structure (format: xxx-xxx)')
     parser.add_argument('struct2', help='Second structure file')
-    parser.add_argument('-s2', required=True, help='Residue selection for second structure (format: xxx-xxx)')
+    parser.add_argument('-s2', required=True, type=str, help='Residue selection for second structure (format: xxx-xxx)')
     parser.add_argument('-t1', required=False, help='Trajectory file for first structure')
     parser.add_argument('-t2', required=False, help='Trajectory file for second structure')
     parser.add_argument('-m', choices=['a', 'r', 'c'], required=False, default='c',

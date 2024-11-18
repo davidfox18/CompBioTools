@@ -98,33 +98,23 @@ class RMSFCalculator:
         except Exception as e:
             raise Exception(f"Error loading structure/trajectory files: {str(e)}")
     
+    """
     def parse_residue_range(self, resid_range: str) -> Tuple[int, int]:
-        """Parse residue range string 'xxx-xxx' into start and end residue numbers."""
+        """"Parse residue range string 'xxx-xxx' into start and end residue numbers.""""
         start, end = map(int, resid_range.split('-'))
         if start > end:
             raise ValueError(f"Invalid range.")
         else:
             return start, end
+    """
             
     
-    def get_selection_string(self, resid_range: str, mode: str) -> str:
-        """Create MDAnalysis selection string based on residue range and mode."""
-        try:
-            start, end = self.parse_residue_range(resid_range)
-        
-            base_selection = f"resid {start}:{end}"
-        except:
-            if resid_range == "protein":
-                base_selection = "protein"
-            else:
-                raise ValueError(f"Invalid selection")
-                
-
-        
+    def get_selection_string(self, selection: str, mode: str) -> str:
+        """Create MDAnalysis selection string based on selection and mode."""
         if mode == 'c':
-            return f"({base_selection}) and name CA"
+            return f"({selection}) and name CA"
         elif mode in ['a', 'r']:
-            return base_selection
+            return selection
             
         raise ValueError(f"Invalid mode: {mode}")
 
@@ -357,11 +347,11 @@ def main():
     parser = argparse.ArgumentParser(description='Calculate RMSF over trajectory using MDAnalysis')
     parser.add_argument('struct', help='Structure file (PDB, GRO, etc.)')
     parser.add_argument('traj', help='Trajectory file')
-    parser.add_argument('-s', required=True, help='Residue selection (format: xxx-xxx)')
+    parser.add_argument('-s', required=True, type=str, help='Residue selection (format: xxx-xxx)')
     parser.add_argument('-m', choices=['a', 'r', 'c'], default='c',
                        help='RMSF mode: a (all atoms), r (per residue), c (CA only)')
-    parser.add_argument('--plot', nargs='?', const='rmsd_plot.png', default=None,
-                       help='name of output file for RMSD plot. Default \'rmsd_plot.png\'')
+    parser.add_argument('--plot', nargs='?', const='rmsf_plot.png', default=None,
+                       help='name of output file for RMSF plot. Default \'rmsf_plot.png\'')
     parser.add_argument('--table', nargs='?', const='rmsf_sorted.txt', default=None,
                        help='Write sorted RMSF values to file (default: rmsf_sorted.txt)')
     parser.add_argument('--pdb', nargs='?', const='rmsf_colored.pdb', default=None,
@@ -407,11 +397,11 @@ def main():
             calculator.save(rmsf_dict, args.save)
             print(f"\nDictionary file saved as {args.save}")
         
-        # Plot RMSD values
+        # Plot RMSF values
         if args.plot is not None:
-            title = f"RMSD Distribution ({mode_desc[args.m]})"
-            calculator.plot_rmsd_values(rmsf_dict, args.m, title, args.plot)
-            print(f"\nRMSD plot has been saved as {args.plot}")
+            title = f"RMSF Distribution ({mode_desc[args.m]})"
+            calculator.plot_rmsf_values(rmsf_dict, args.m, title, args.plot)
+            print(f"\nRMSF plot has been saved as {args.plot}")
         
     except Exception as e:
         print(f"Error: {str(e)}")
