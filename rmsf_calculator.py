@@ -9,6 +9,7 @@ import sys
 import warnings
 import time
 from tqdm import tqdm
+import pickle
 
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 warnings.filterwarnings('ignore', category=Warning)
@@ -342,6 +343,16 @@ class RMSFCalculator:
         finally:
             writer.close()
 
+    def save(self,
+            rmsf_dict: Dict[str, float],
+            output_file: str = "rmsf_dict.pickle"):
+        """Function to save rmsf_object to pickle file for further anlaysis"""
+        
+        with open(output_file, 'wb') as file:
+            pickle.dump(rmsf_dict, file)
+
+        file.close()
+
 def main():
     parser = argparse.ArgumentParser(description='Calculate RMSF over trajectory using MDAnalysis')
     parser.add_argument('struct', help='Structure file (PDB, GRO, etc.)')
@@ -349,12 +360,14 @@ def main():
     parser.add_argument('-s', required=True, help='Residue selection (format: xxx-xxx)')
     parser.add_argument('-m', choices=['a', 'r', 'c'], default='c',
                        help='RMSF mode: a (all atoms), r (per residue), c (CA only)')
-    parser.add_argument('-o', default='rmsf_plot.png',
-                       help='Output plot filename (default: rmsf_plot.png)')
+    parser.add_argument('--plot', nargs='?', const='rmsd_plot.png', default=None,
+                       help='name of output file for RMSD plot. Default \'rmsd_plot.png\'')
     parser.add_argument('--table', nargs='?', const='rmsf_sorted.txt', default=None,
                        help='Write sorted RMSF values to file (default: rmsf_sorted.txt)')
     parser.add_argument('--pdb', nargs='?', const='rmsf_colored.pdb', default=None,
                        help='Write PDB with RMSF as B-factors (default: rmsf_colored.pdb)')
+    parser.add_argument('--save', nargs='?', const='rmsf_dict.pickle', default=None,
+                       help='Write RMSF dictionary to pickle file (default: rmsf_dict.pickle)')
     
     args = parser.parse_args()
     calculator = RMSFCalculator()
@@ -389,11 +402,16 @@ def main():
             
         if args.pdb is not None:
             calculator.write_rmsf_to_pdb(u, rmsf_dict, args.pdb)
+
+        if args.save is not None:
+            calculator.save(rmsf_dict, args.save)
+            print(f"\nDictionary file saved as {args.save}")
         
-        title = f"RMSD Distribution ({mode_desc[args.m]})"
-        calculator.plot_rmsf_values(rmsf_dict, args.m, 
-                                  title, args.o)
-        print(f"\nRMSF plot has been saved as {args.o}")
+        # Plot RMSD values
+        if args.plot is not None:
+            title = f"RMSD Distribution ({mode_desc[args.m]})"
+            calculator.plot_rmsd_values(rmsf_dict, args.m, title, args.plot)
+            print(f"\nRMSD plot has been saved as {args.plot}")
         
     except Exception as e:
         print(f"Error: {str(e)}")
