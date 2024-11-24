@@ -23,6 +23,9 @@ Tools for doing computational structural biology and drug discovery
     * Feature types
 
 10. RMSF Analysis
-
+11. Fram extractor
+    * extract structure from a specified frame(s) of simulation --> return pdb
+12. Trajectory extractor
+    * extract subset of frames from trajectories --> return trajectory file
 
 
